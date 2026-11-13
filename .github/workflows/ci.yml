@@ -1,0 +1,96 @@
+name: Airflow pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  AIRFLOW_VERSION: "3.0.2"
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - name: Install test dependencies
+        run: pip install -r requirements-dev.txt
+      - name: Lint
+        run: flake8 dags status_api tests --max-line-length 100
+      - name: Unit and service tests
+        run: pytest -v
+
+  dag-run:
+    runs-on: ubuntu-latest
+    env:
+      AIRFLOW_HOME: ${{ github.workspace }}/.airflow_home
+      AIRFLOW__CORE__DAGS_FOLDER: ${{ github.workspace }}/dags
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      ARTIFACT_DIR: ${{ github.workspace }}/.ci_artifacts
+      PYTHONPATH: ${{ github.workspace }}/dags
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - name: Install Airflow with official constraints
+        run: |
+          pip install "apache-airflow==${AIRFLOW_VERSION}" \
+            --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-${AIRFLOW_VERSION}/constraints-${PYTHON_VERSION}.txt"
+          pip install -r requirements-airflow.txt pytest==8.3.3
+      - name: Initialize the Airflow database
+        run: airflow db migrate
+      - name: DAG integrity tests
+        run: pytest tests/test_dag_integrity.py -v
+      - name: Run the DAG end to end (first run promotes)
+        run: airflow dags test ad_click_pipeline 2026-11-01
+      - name: Run the DAG again (gate keeps the champion)
+        run: airflow dags test ad_click_pipeline 2026-11-02
+      - name: Check the registry decisions
+        run: |
+          python - << 'PY'
+          import json, os
+          from pathlib import Path
+          registry = Path(os.environ["ARTIFACT_DIR"]) / "registry"
+          decision_list = [json.loads(line)["decision"]
+                           for line in (registry / "history.jsonl").read_text().splitlines()]
+          champion = json.loads((registry / "champion.json").read_text())
+          print("decisions:", decision_list)
+          print("champion:", champion["candidate"], champion["test"])
+          assert decision_list == ["promoted", "kept_champion"], decision_list
+          assert champion["test"]["auc"] >= 0.9
+          PY
+      - name: Run the scoring DAG with the champion
+        run: airflow dags test ad_click_scoring 2026-11-03
+      - name: Check the predictions
+        run: |
+          python - << 'PY'
+          import csv, json, os
+          from pathlib import Path
+          artifacts = Path(os.environ["ARTIFACT_DIR"])
+          summary = json.loads((artifacts / "latest_scoring.json").read_text())
+          print("scoring:", summary)
+          with open(summary["predictions_path"]) as f:
+              row_list = list(csv.DictReader(f))
+          assert len(row_list) == summary["rows_scored"] == 200
+          assert all(0 <= float(r["click_probability"]) <= 1 for r in row_list)
+          PY
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate the compose file
+        run: |
+          cp .env.example .env
+          docker compose config --quiet
+      - name: Build the status service image
+        run: docker build -t airflow-ml-status-api:ci status_api
