@@ -48,6 +48,8 @@ jobs:
           pip install -r requirements-airflow.txt pytest==8.3.3
       - name: Initialize the Airflow database
         run: airflow db migrate
+      - name: Register the DAGs and their Assets
+        run: airflow dags reserialize
       - name: DAG integrity tests
         run: pytest tests/test_dag_integrity.py -v
       - name: Run the DAG end to end (first run promotes)
