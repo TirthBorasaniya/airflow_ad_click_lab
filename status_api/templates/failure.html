@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pipeline Not Successful | MLOps Platform</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #fff1f2;
+            --card-bg: #ffffff;
+            --error-red: #e11d48;
+            --text-main: #1e293b;
+            --text-muted: #64748b;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .container {
+            width: 100%;
+            max-width: 500px;
+            background: var(--card-bg);
+            border-radius: 16px;
+            box-shadow: 0 10px 25px rgba(225, 29, 72, 0.1);
+            padding: 40px;
+            text-align: center;
+            border-top: 8px solid var(--error-red);
+        }
+        .icon-circle {
+            width: 80px;
+            height: 80px;
+            background: #fff1f2;
+            color: var(--error-red);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 0 auto 20px;
+            font-size: 40px;
+            font-weight: bold;
+        }
+        h1 { margin: 0 0 10px; font-weight: 600; color: var(--text-main); }
+        p { color: var(--text-muted); margin-bottom: 30px; }
+        
+        .metadata-grid {
+            background: #fafafa;
+            border: 1px dashed #cbd5e1;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: left;
+            margin-bottom: 30px;
+        }
+        .meta-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+        .meta-label { font-weight: 600; color: var(--text-muted); }
+        .meta-value { color: var(--error-red); font-family: monospace; }
+
+        .btn-group { display: flex; flex-direction: column; gap: 10px; }
+        .btn {
+            width: 100%;
+            padding: 12px;
+            border-radius: 8px;
+            border: none;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            font-size: 14px;
+            box-sizing: border-box;
+            display: block;
+        }
+        .btn-danger { background: var(--error-red); color: white; }
+        .btn-outline { background: transparent; border: 1px solid var(--error-red); color: var(--error-red); }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="icon-circle">!</div>
+        {% if latest_run.state in ("queued", "running") %}
+        <h1>Pipeline In Progress</h1>
+        {% else %}
+        <h1>Pipeline Not Successful</h1>
+        {% endif %}
+        <p>{{ latest_run.note or "The latest run of the ad click pipeline did not succeed." }}</p>
+
+        <div class="metadata-grid">
+            <div class="meta-item"><span class="meta-label">Status</span><span class="meta-value">{{ latest_run.state|upper }}</span></div>
+            <div class="meta-item"><span class="meta-label">Run ID</span><span class="meta-value" style="color:#64748b">{{ latest_run.run_id }}</span></div>
+            <div class="meta-item"><span class="meta-label">Started</span><span class="meta-value" style="color:#64748b">{{ latest_run.start_date }}</span></div>
+            {% if champion %}
+            <div class="meta-item"><span class="meta-label">Serving champion</span><span class="meta-value" style="color:#64748b">{{ champion.candidate }} (AUC {{ "%.4f"|format(champion.test.auc) }})</span></div>
+            {% endif %}
+        </div>
+
+        <div class="btn-group">
+            <a href="http://localhost:8080" class="btn btn-danger">Open Airflow</a>
+            <a href="/api/status" class="btn btn-outline">View JSON</a>
+        </div>
+    </div>
+</body>
+</html>
