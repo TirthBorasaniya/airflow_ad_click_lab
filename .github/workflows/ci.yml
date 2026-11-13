@@ -43,7 +43,7 @@ jobs:
           cache: pip
       - name: Install Airflow with official constraints
         run: |
-          pip install "apache-airflow==${AIRFLOW_VERSION}" \
+          pip install "apache-airflow==${AIRFLOW_VERSION}" pandas \
             --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-${AIRFLOW_VERSION}/constraints-${PYTHON_VERSION}.txt"
           pip install -r requirements-airflow.txt pytest==8.3.3
       - name: Initialize the Airflow database
@@ -90,7 +90,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Validate the compose file
         run: |
-          cp .env.example .env
+          ./setup.sh
           docker compose config --quiet
       - name: Build the status service image
         run: docker build -t airflow-ml-status-api:ci status_api
